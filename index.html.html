@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Poker Set Collector</title>
+  <style>
+    :root {
+      --bg: #111318;
+      --panel: #1b1f27;
+      --panel2: #242a34;
+      --text: #f4f6fa;
+      --muted: #aab2c0;
+      --accent: #6ea8fe;
+      --done: #3fb950;
+      --red: #ff6b6b;
+      --border: #343b48;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    main {
+      width: min(1000px, 94vw);
+      margin: 0 auto;
+      padding: 28px 0 48px;
+    }
+    h1 { margin: 0 0 6px; font-size: clamp(1.8rem, 4vw, 2.7rem); }
+    .subtitle { color: var(--muted); margin-bottom: 22px; }
+    .topbar {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0,1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .stat {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .stat strong { display: block; font-size: 1.6rem; }
+    .stat span { color: var(--muted); font-size: .9rem; }
+    .progress-wrap {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 18px;
+    }
+    .progress-track {
+      width: 100%;
+      height: 14px;
+      background: #0d0f13;
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, var(--accent), var(--done));
+      transition: width .2s ease;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+    button {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--panel2);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: .95rem;
+    }
+    button:hover { border-color: var(--accent); }
+    button.danger:hover { border-color: var(--red); }
+    .rank {
+      margin-bottom: 18px;
+    }
+    .rank h2 {
+      margin: 0 0 9px;
+      font-size: 1.05rem;
+      color: var(--muted);
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0,1fr));
+      gap: 10px;
+    }
+    .card {
+      min-height: 92px;
+      background: var(--panel);
+      border: 2px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+      transition: .15s ease;
+    }
+    .card:hover { transform: translateY(-1px); border-color: var(--accent); }
+    .card.collected {
+      border-color: var(--done);
+      background: #17251b;
+      opacity: .78;
+    }
+    .card .name { font-weight: 700; }
+    .card .suit { font-size: 1.8rem; line-height: 1; }
+    .red { color: #ff7b7b; }
+    .black { color: #f4f6fa; }
+    .status {
+      font-size: .82rem;
+      color: var(--muted);
+    }
+    .joker-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 10px;
+    }
+    .footer-note {
+      margin-top: 20px;
+      color: var(--muted);
+      font-size: .9rem;
+      text-align: center;
+    }
+    @media (max-width: 650px) {
+      .cards { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .topbar { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>🃏 Poker Set Collector</h1>
+  <div class="subtitle">Click cards to mark them collected. Progress saves automatically on this browser.</div>
+
+  <section class="topbar">
+    <div class="stat"><strong id="collectedCount">0</strong><span>Collected</span></div>
+    <div class="stat"><strong id="remainingCount">54</strong><span>Remaining</span></div>
+    <div class="stat"><strong id="percentCount">0%</strong><span>Complete</span></div>
+  </section>
+
+  <section class="progress-wrap">
+    <div><strong>Collection progress</strong></div>
+    <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
+  </section>
+
+  <div class="controls">
+    <button type="button" id="showAll">Show all</button>
+    <button type="button" id="showMissing">Show missing only</button>
+    <button type="button" id="markAll">Mark all collected</button>
+    <button type="button" id="reset" class="danger">Reset to starting list</button>
+  </div>
+
+  <div id="collection"></div>
+  <div class="footer-note">Your progress is stored locally on this device and browser.</div>
+</main>
+
+<script>
+  const suits = [
+    {key:'diamonds', name:'Diamonds', symbol:'♦', color:'red'},
+    {key:'hearts', name:'Hearts', symbol:'♥', color:'red'},
+    {key:'spades', name:'Spades', symbol:'♠', color:'black'},
+    {key:'clubs', name:'Clubs', symbol:'♣', color:'black'}
+  ];
+  const ranks = ['A','K','Q','J','10','9','8','7','6','5','4','3','2'];
+  const rankNames = {A:'Aces',K:'Kings',Q:'Queens',J:'Jacks','10':'10s','9':'9s','8':'8s','7':'7s','6':'6s','5':'5s','4':'4s','3':'3s','2':'2s'};
+
+  const startingCollected = new Set([
+    'A-diamonds','A-hearts','A-spades',
+    'K-diamonds','K-hearts','K-spades',
+    'Q-diamonds','Q-hearts','Q-spades',
+    'J-diamonds','J-hearts','J-spades','J-clubs',
+    '10-diamonds',
+    '9-diamonds','9-hearts',
+    '8-clubs','8-hearts','8-spades',
+    '7-diamonds','7-hearts',
+    '6-diamonds','6-clubs','6-hearts','6-spades',
+    '5-diamonds','5-hearts',
+    '4-clubs','4-hearts','4-spades',
+    '3-diamonds','3-clubs','3-spades',
+    '2-clubs','2-hearts','2-spades'
+  ]);
+
+  const storageKey = 'poker-set-collector-v1';
+  let collected = loadProgress();
+  let filter = 'all';
+
+  function loadProgress() {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) return new Set(JSON.parse(raw));
+    } catch (e) {}
+    return new Set(startingCollected);
+  }
+
+  function saveProgress() {
+    localStorage.setItem(storageKey, JSON.stringify([...collected]));
+  }
+
+  function allCardIds() {
+    const ids = [];
+    for (const rank of ranks) {
+      for (const suit of suits) ids.push(`${rank}-${suit.key}`);
+    }
+    ids.push('joker-1','joker-2');
+    return ids;
+  }
+
+  function toggleCard(id) {
+    if (collected.has(id)) collected.delete(id);
+    else collected.add(id);
+    saveProgress();
+    render();
+  }
+
+  function createCard(id, label, symbol, colorClass) {
+    const isCollected = collected.has(id);
+    if (filter === 'missing' && isCollected) return null;
+    const el = document.createElement('div');
+    el.className = 'card' + (isCollected ? ' collected' : '');
+    el.setAttribute('role','button');
+    el.setAttribute('tabindex','0');
+    el.setAttribute('aria-pressed', String(isCollected));
+    el.innerHTML = `
+      <div class="name">${label}</div>
+      <div class="suit ${colorClass}">${symbol}</div>
+      <div class="status">${isCollected ? '✓ Collected' : 'Missing'}</div>
+    `;
+    el.addEventListener('click', () => toggleCard(id));
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleCard(id);
+      }
+    });
+    return el;
+  }
+
+  function render() {
+    const root = document.getElementById('collection');
+    root.innerHTML = '';
+
+    for (const rank of ranks) {
+      const section = document.createElement('section');
+      section.className = 'rank';
+      const heading = document.createElement('h2');
+      heading.textContent = rankNames[rank];
+      section.appendChild(heading);
+
+      const grid = document.createElement('div');
+      grid.className = 'cards';
+
+      let visible = 0;
+      for (const suit of suits) {
+        const id = `${rank}-${suit.key}`;
+        const card = createCard(id, `${rank} of ${suit.name}`, suit.symbol, suit.color);
+        if (card) {
+          grid.appendChild(card);
+          visible++;
+        }
+      }
+      if (visible > 0) {
+        section.appendChild(grid);
+        root.appendChild(section);
+      }
+    }
+
+    const jokerSection = document.createElement('section');
+    jokerSection.className = 'rank';
+    const jokerHeading = document.createElement('h2');
+    jokerHeading.textContent = 'Jokers';
+    jokerSection.appendChild(jokerHeading);
+    const jokerGrid = document.createElement('div');
+    jokerGrid.className = 'joker-grid';
+    let jokerVisible = 0;
+    [['joker-1','Joker 1'],['joker-2','Joker 2']].forEach(([id,label]) => {
+      const card = createCard(id, label, '🃏', 'black');
+      if (card) { jokerGrid.appendChild(card); jokerVisible++; }
+    });
+    if (jokerVisible > 0) {
+      jokerSection.appendChild(jokerGrid);
+      root.appendChild(jokerSection);
+    }
+
+    const count = collected.size;
+    const total = 54;
+    const percent = Math.round((count / total) * 100);
+    document.getElementById('collectedCount').textContent = count;
+    document.getElementById('remainingCount').textContent = total - count;
+    document.getElementById('percentCount').textContent = percent + '%';
+    document.getElementById('progressFill').style.width = percent + '%';
+  }
+
+  document.getElementById('showAll').addEventListener('click', () => {
+    filter = 'all'; render();
+  });
+  document.getElementById('showMissing').addEventListener('click', () => {
+    filter = 'missing'; render();
+  });
+  document.getElementById('markAll').addEventListener('click', () => {
+    collected = new Set(allCardIds());
+    saveProgress(); render();
+  });
+  document.getElementById('reset').addEventListener('click', () => {
+    if (confirm('Reset your collection to the original starting list?')) {
+      collected = new Set(startingCollected);
+      saveProgress(); render();
+    }
+  });
+
+  render();
+</script>
+</body>
+</html>
